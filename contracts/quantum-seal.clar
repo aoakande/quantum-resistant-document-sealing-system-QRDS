@@ -6,6 +6,10 @@
 (define-constant ERR-ALREADY-EXISTS (err u402))
 (define-constant ERR-NOT-FOUND (err u404))
 (define-constant ERR-INVALID-SIGNATURE (err u403))
+;; Event identifiers
+(define-constant EVENT-DOCUMENT-SEALED "document-sealed")
+(define-constant EVENT-BATCH-SEALED "batch-sealed")
+(define-constant EVENT-STATUS-UPDATED "status-updated")
 
 ;; Data Variables
 (define-data-var contract-owner principal tx-sender)
