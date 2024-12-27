@@ -159,6 +159,47 @@
         (ok new-id)
     ))
 
+;; Batch processing functions
+(define-public (seal-document-batch
+    (documents (list 10 {
+        hash: (buff 32),
+        title: (string-ascii 64),
+        description: (string-ascii 256),
+        category: (string-ascii 32),
+        signature: (buff 512),
+        merkle-root: (buff 32),
+        public-key: (buff 256),
+        merkle-path: (list 32 (buff 32))
+    })))
+
+    (let
+        ((batch-id (+ (var-get last-batch-id) u1))
+         (document-ids (list)))
+
+        ;; Process each document
+        (map process-batch-document documents)
+
+        ;; Store batch record
+        (asserts! (map-insert batch-records
+            {batch-id: batch-id}
+            {
+                document-ids: document-ids,
+                timestamp: block-height,
+                status: "sealed",
+                owner: tx-sender
+            })
+            ERR-ALREADY-EXISTS)
+
+        ;; Update batch counter
+        (var-set last-batch-id batch-id)
+
+        ;; Print event
+        (print {event: EVENT-BATCH-SEALED, 
+                batch-id: batch-id,
+                count: (len documents)})
+
+        (ok batch-id)))
+
 ;; Read-only functions
 (define-read-only (get-document (id uint))
     (map-get? documents {id: id}))
