@@ -41,6 +41,17 @@
     }
 )
 
+;; Batch processing map
+(define-map batch-records
+    {batch-id: uint}
+    {
+        document-ids: (list 100 uint),
+        timestamp: uint,
+        status: (string-ascii 10),
+        owner: principal
+    }
+)
+
 ;; Ownership/Authorization check
 (define-private (is-contract-owner)
     (is-eq tx-sender (var-get contract-owner)))
