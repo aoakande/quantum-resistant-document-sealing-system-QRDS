@@ -25,13 +25,13 @@
 (define-data-var last-batch-id uint u0)
 
 ;; Data Maps
-(define-map documents
+(define-map document-records
     {id: uint}  ;; Using uint ID for efficient indexing
     {
         hash: (buff 32),
         owner: principal,
         timestamp: uint,
-        status: (string-ascii 10),
+        status: (string-ascii 7),  ;; Sized to fit largest status string
         signature: {
             value: (buff 512),      ;; Quantum-resistant signature size
             merkle-root: (buff 32),
@@ -55,7 +55,7 @@
     {
         document-ids: (list 100 uint),
         timestamp: uint,
-        status: (string-ascii 10),
+        status: (string-ascii 7),
         owner: principal
     }
 )
@@ -65,11 +65,11 @@
     (is-eq tx-sender (var-get contract-owner)))
 
 (define-private (is-document-owner (id uint))
-    (match (map-get? documents {id: id})
+    (match (map-get? document-records {id: id})
         doc (is-eq tx-sender (get owner doc))
         false))
 
-(define-private (is-valid-status (status (string-ascii 10)))
+(define-private (is-valid-status (status (string-ascii 7)))
     (is-some (index-of VALID-STATUS status)))
 
 ;; Core Document Functions
@@ -87,7 +87,7 @@
         ((new-id (+ (var-get last-document-id) u1)))
         
         ;; Store document data
-        (asserts! (map-insert documents
+        (asserts! (map-insert document-records
             {id: new-id}
             {
                 hash: document-hash,
@@ -129,7 +129,7 @@
 
 ;; Batch Processing Functions
 (define-public (seal-document-batch
-    (documents (list 10 {
+    (document-batch (list 10 {
         hash: (buff 32),
         title: (string-ascii 64),
         description: (string-ascii 256),
@@ -145,11 +145,11 @@
          (document-ids (list)))
         
         ;; Check batch size
-        (asserts! (<= (len documents) MAX-BATCH-SIZE)
+        (asserts! (<= (len document-batch) MAX-BATCH-SIZE)
             ERR-BATCH-LIMIT-EXCEEDED)
         
         ;; Process each document
-        (map process-batch-document documents)
+        (map process-batch-document document-batch)
         
         ;; Store batch record
         (asserts! (map-insert batch-records
@@ -169,7 +169,7 @@
         (print {
             event: EVENT-BATCH-SEALED,
             batch-id: batch-id,
-            count: (len documents),
+            count: (len document-batch),
             owner: tx-sender
         })
         
@@ -190,7 +190,7 @@
         ((new-id (+ (var-get last-document-id) u1)))
         
         ;; Store document
-        (map-insert documents
+        (map-insert document-records
             {id: new-id}
             {
                 hash: (get hash doc),
@@ -230,14 +230,14 @@
 ;; Document Management Functions
 (define-public (update-document-status
     (id uint)
-    (new-status (string-ascii 10)))
+    (new-status (string-ascii 7)))
     
     (begin
         (asserts! (is-document-owner id) ERR-NOT-AUTHORIZED)
         (asserts! (is-valid-status new-status) ERR-INVALID-STATUS)
-        (match (map-get? documents {id: id})
+        (match (map-get? document-records {id: id})
             doc (begin
-                (map-set documents
+                (map-set document-records
                     {id: id}
                     (merge doc {status: new-status}))
                 (print {
@@ -255,9 +255,9 @@
     
     (begin
         (asserts! (is-document-owner id) ERR-NOT-AUTHORIZED)
-        (match (map-get? documents {id: id})
+        (match (map-get? document-records {id: id})
             doc (begin
-                (map-set documents
+                (map-set document-records
                     {id: id}
                     (merge doc {owner: new-owner}))
                 (print {
@@ -271,7 +271,7 @@
 
 ;; Read-Only Functions
 (define-read-only (get-document (id uint))
-    (map-get? documents {id: id}))
+    (map-get? document-records {id: id}))
 
 (define-read-only (get-metadata (id uint))
     (map-get? document-metadata {id: id}))
@@ -280,7 +280,7 @@
     (id uint)
     (provided-signature (buff 512)))
     
-    (match (map-get? documents {id: id})
+    (match (map-get? document-records {id: id})
         doc (ok (is-eq (get value (get signature doc)) provided-signature))
         ERR-NOT-FOUND))
 
@@ -289,7 +289,7 @@
     (leaf (buff 32)))
     
     (let
-        ((doc (unwrap! (map-get? documents {id: id}) ERR-NOT-FOUND))
+        ((doc (unwrap! (map-get? document-records {id: id}) ERR-NOT-FOUND))
          (metadata (unwrap! (map-get? document-metadata {id: id}) ERR-NOT-FOUND)))
         
         ;; Verify if leaf exists in Merkle path
