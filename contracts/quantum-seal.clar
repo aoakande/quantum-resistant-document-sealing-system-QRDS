@@ -52,6 +52,8 @@
     }
 )
 
+(define-data-var last-batch-id uint u0)
+
 ;; Ownership/Authorization check
 (define-private (is-contract-owner)
     (is-eq tx-sender (var-get contract-owner)))
