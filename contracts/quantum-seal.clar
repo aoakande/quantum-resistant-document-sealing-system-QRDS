@@ -63,6 +63,56 @@
         doc (is-eq tx-sender (get owner doc))
         false))
 
+;; Helper function for batch processing
+(define-private (process-batch-document (doc {
+    hash: (buff 32),
+    title: (string-ascii 64),
+    description: (string-ascii 256),
+    category: (string-ascii 32),
+    signature: (buff 512),
+    merkle-root: (buff 32),
+    public-key: (buff 256),
+    merkle-path: (list 32 (buff 32))}))
+
+    (let
+        ((new-id (+ (var-get last-document-id) u1)))
+
+        ;; Store document
+        (map-insert documents
+            {id: new-id}
+            {
+                hash: (get hash doc),
+                owner: tx-sender,
+                timestamp: block-height,
+                status: "active",
+                signature: {
+                    value: (get signature doc),
+                    merkle-root: (get merkle-root doc),
+                    public-key: (get public-key doc)
+                }
+            })
+
+        ;; Store metadata
+        (map-insert document-metadata
+            {id: new-id}
+            {
+                title: (get title doc),
+                description: (get description doc),
+                category: (get category doc),
+                merkle-path: (get merkle-path doc)
+            })
+
+        ;; Update document counter
+        (var-set last-document-id new-id)
+
+        ;; Print event
+        (print {event: EVENT-DOCUMENT-SEALED, 
+                document-id: new-id,
+                hash: (get hash doc)})
+
+        new-id))
+
+
 ;; Core document functions
 (define-public (seal-document
     (document-hash (buff 32))
