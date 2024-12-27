@@ -215,6 +215,15 @@
         doc (ok (is-eq (get value (get signature doc)) provided-signature))
         ERR-NOT-FOUND))
 
+; Batch retrieval functions
+(define-read-only (get-batch (batch-id uint))
+    (map-get? batch-records {batch-id: batch-id}))
+
+(define-read-only (get-batch-documents (batch-id uint))
+    (match (map-get? batch-records {batch-id: batch-id})
+        batch (ok (map get-document (get document-ids batch)))
+        ERR-NOT-FOUND))
+
 (define-read-only (verify-merkle-proof
     (id uint)
     (leaf (buff 32)))
