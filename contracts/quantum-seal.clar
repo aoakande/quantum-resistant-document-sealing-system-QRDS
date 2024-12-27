@@ -1,18 +1,19 @@
-;; Quantum-Resistant Document Sealing Contract
-;; This contract handles document sealing using hash-based signatures
-;; and implements a Merkle signature scheme for quantum resistance
+;; Quantum-Resistant Document Sealing System
+;; Initial implementation with core functionality
 
+;; Constants
 (define-constant contract-owner tx-sender)
+(define-constant err-not-owner (err u100))
+(define-constant err-already-sealed (err u101))
+(define-constant err-document-not-found (err u102))
 
-;; Data Variables
-(define-map sealed-documents 
-    {document-hash: (buff 32)} 
+;; Data Maps
+(define-map sealed-documents
+    {document-hash: (buff 32)}
     {
         owner: principal,
         timestamp: uint,
-        signature: (buff 512),
-        merkle-root: (buff 32),
-        verification-key: (buff 256)
+        status: (string-ascii 10)
     }
 )
 
@@ -21,49 +22,41 @@
     {
         title: (string-ascii 64),
         description: (string-ascii 256),
-        category: (string-ascii 32),
-        status: (string-ascii 16)
+        category: (string-ascii 32)
     }
 )
 
 ;; Public Functions
 (define-public (seal-document 
     (document-hash (buff 32))
-    (signature (buff 512))
-    (merkle-root (buff 32))
-    (verification-key (buff 256))
     (title (string-ascii 64))
     (description (string-ascii 256))
     (category (string-ascii 32)))
 
     (let
-        (
-            (caller tx-sender)
-            (block-time block-height)
-        )
-        (asserts! (is-none (get-sealed-document document-hash))
-            (err u1)) ;; Document already sealed
+        ((caller tx-sender))
 
+        ;; Check if document already exists
+        (asserts! (is-none (get-sealed-document document-hash))
+            err-already-sealed)
+
+        ;; Insert document data
         (try! (map-insert sealed-documents
             {document-hash: document-hash}
             {
                 owner: caller,
-                timestamp: block-time,
-                signature: signature,
-                merkle-root: merkle-root,
-                verification-key: verification-key
-            }
-        ))
+                timestamp: block-height,
+                status: "active"
+            }))
 
+        ;; Insert metadata
         (try! (map-insert document-metadata
             {document-hash: document-hash}
             {
                 title: title,
                 description: description,
-                category: category,
-                status: "active"
-            }
-        ))
+                category: category
+            }))
 
         (ok true)
     )
@@ -78,16 +71,10 @@
     (map-get? document-metadata {document-hash: document-hash})
 )
 
-;; Verification Functions
-(define-read-only (verify-document 
-    (document-hash (buff 32))
-    (provided-signature (buff 512)))
-
-    (let
-        ((document-data (unwrap! (get-sealed-document document-hash)
-            (err u2))) ;; Document not found
-        )
-
-        (ok (is-eq (get signature document-data) provided-signature))
+;; Authorization Check
+(define-private (is-owner (document-hash (buff 32)))
+    (let ((doc-data (unwrap! (get-sealed-document document-hash)
+            false)))
+        (is-eq tx-sender (get owner doc-data))
     )
 )
