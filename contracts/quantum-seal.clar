@@ -32,32 +32,34 @@
     (title (string-ascii 64))
     (description (string-ascii 256))
     (category (string-ascii 32)))
-
+    
     (let
         ((caller tx-sender))
-
+        
         ;; Check if document already exists
         (asserts! (is-none (get-sealed-document document-hash))
             err-already-sealed)
-
+        
         ;; Insert document data
-        (try! (map-insert sealed-documents
+        (asserts! (map-insert sealed-documents
             {document-hash: document-hash}
             {
                 owner: caller,
                 timestamp: block-height,
                 status: "active"
-            }))
-
+            })
+            (err u103)) ;; Failed to insert document data
+        
         ;; Insert metadata
-        (try! (map-insert document-metadata
+        (asserts! (map-insert document-metadata
             {document-hash: document-hash}
             {
                 title: title,
                 description: description,
                 category: category
-            }))
-
+            })
+            (err u104)) ;; Failed to insert metadata
+        
         (ok true)
     )
 )
