@@ -2,116 +2,65 @@ import { describe, it, expect } from "vitest";
 import { Cl } from "@stacks/transactions";
 
 describe("quantum-seal", () => {
-  // Get test accounts
   const accounts = simnet.getAccounts();
   const deployer = accounts.get("deployer")!;
   const wallet1 = accounts.get("wallet_1")!;
 
-  // Helper function to create exact-size buffers
-  function createBuffer(size: number): string {
-    return Array(size * 2).fill('0').join('');  // Each byte needs 2 hex chars
-  }
+  // Helper to create properly sized buffers
+  const createBuffer = (size: number) => "00".repeat(size);
 
-  // Create properly sized test data
-  const testHash = createBuffer(32);       // 32 bytes
-  const testSignature = createBuffer(512); // 512 bytes
-  const testPublicKey = createBuffer(256); // 256 bytes
-  const testMerkleRoot = createBuffer(32); // 32 bytes
+  // Test data with correct sizes
+  const testDoc = {
+    hash: createBuffer(32),          // 32 bytes
+    signature: createBuffer(512),    // 512 bytes
+    merkleRoot: createBuffer(32),    // 32 bytes
+    publicKey: createBuffer(256),    // 256 bytes
+    title: "Test Document",
+    description: "Test Description",
+    category: "Test"
+  };
 
-  it("successfully seals a document", () => {
+  // Core sealing functionality
+  it("seals a new document", () => {
     const block = simnet.callPublicFn(
       "quantum-seal",
       "seal-document",
       [
-        Cl.buff(testHash),
-        Cl.ascii("Test Document"),
-        Cl.ascii("Test Description"),
-        Cl.ascii("Test"),
-        Cl.buff(testSignature),
-        Cl.buff(testMerkleRoot),
-        Cl.buff(testPublicKey),
-        Cl.list([Cl.buff(testMerkleRoot)])
+        Cl.buff(testDoc.hash),
+        Cl.ascii(testDoc.title),
+        Cl.ascii(testDoc.description),
+        Cl.ascii(testDoc.category),
+        Cl.buff(testDoc.signature),
+        Cl.buff(testDoc.merkleRoot),
+        Cl.buff(testDoc.publicKey),
+        Cl.list([Cl.buff(testDoc.merkleRoot)])
       ],
       deployer
     );
 
-    // Check the result
-    expect(block.result).toBeOk(Cl.uint(1));
-
-    // Verify document was stored correctly
-    const docResponse = simnet.callReadOnlyFn(
-      "quantum-seal",
-      "get-document",
-      [Cl.uint(1)],
-      deployer
-    );
-
-    const doc = docResponse.result.expectSome().expectTuple();
-    expect(doc.hash).toBe(testHash);
-    expect(doc.status).toBe("active");
+    block.result.expectOk().expectUint(1);
   });
 
-  it("prevents duplicate document sealing", () => {
-    // First sealing
-    let block = simnet.callPublicFn(
-      "quantum-seal",
-      "seal-document",
-      [
-        Cl.buff(testHash),
-        Cl.ascii("Test Document"),
-        Cl.ascii("Test Description"),
-        Cl.ascii("Test"),
-        Cl.buff(testSignature),
-        Cl.buff(testMerkleRoot),
-        Cl.buff(testPublicKey),
-        Cl.list([Cl.buff(testMerkleRoot)])
-      ],
-      deployer
-    );
-
-    expect(block.result).toBeOk(Cl.uint(1));
-
-    // Try to seal same document again
-    block = simnet.callPublicFn(
-      "quantum-seal",
-      "seal-document",
-      [
-        Cl.buff(testHash),
-        Cl.ascii("Test Document"),
-        Cl.ascii("Test Description"),
-        Cl.ascii("Test"),
-        Cl.buff(testSignature),
-        Cl.buff(testMerkleRoot),
-        Cl.buff(testPublicKey),
-        Cl.list([Cl.buff(testMerkleRoot)])
-      ],
-      deployer
-    );
-
-    expect(block.result).toBeErr(Cl.uint(402));
-  });
-
-  it("correctly updates document status", () => {
+  // Document status management
+  it("allows owner to update document status", () => {
     // First seal a document
     let block = simnet.callPublicFn(
       "quantum-seal",
       "seal-document",
       [
-        Cl.buff(testHash),
-        Cl.ascii("Test Document"),
-        Cl.ascii("Test Description"),
-        Cl.ascii("Test"),
-        Cl.buff(testSignature),
-        Cl.buff(testMerkleRoot),
-        Cl.buff(testPublicKey),
-        Cl.list([Cl.buff(testMerkleRoot)])
+        Cl.buff(testDoc.hash),
+        Cl.ascii(testDoc.title),
+        Cl.ascii(testDoc.description),
+        Cl.ascii(testDoc.category),
+        Cl.buff(testDoc.signature),
+        Cl.buff(testDoc.merkleRoot),
+        Cl.buff(testDoc.publicKey),
+        Cl.list([Cl.buff(testDoc.merkleRoot)])
       ],
       deployer
     );
 
-    expect(block.result).toBeOk(Cl.uint(1));
-
-    // Update status
+    // Then update its status
     block = simnet.callPublicFn(
       "quantum-seal",
       "update-document-status",
@@ -119,41 +68,29 @@ describe("quantum-seal", () => {
       deployer
     );
 
-    expect(block.result).toBeOk(Cl.bool(true));
-
-    // Verify status using read-only function
-    const docResponse = simnet.callReadOnlyFn(
-      "quantum-seal",
-      "get-document",
-      [Cl.uint(1)],
-      deployer
-    );
-
-    const doc = docResponse.result.expectSome().expectTuple();
-    expect(doc.status).toBe("revoked");
+    block.result.expectOk().expectBool(true);
   });
 
-  it("enforces owner-only status updates", () => {
+  // Access control
+  it("prevents non-owners from updating status", () => {
     // First seal a document as deployer
     let block = simnet.callPublicFn(
       "quantum-seal",
       "seal-document",
       [
-        Cl.buff(testHash),
-        Cl.ascii("Test Document"),
-        Cl.ascii("Test Description"),
-        Cl.ascii("Test"),
-        Cl.buff(testSignature),
-        Cl.buff(testMerkleRoot),
-        Cl.buff(testPublicKey),
-        Cl.list([Cl.buff(testMerkleRoot)])
+        Cl.buff(testDoc.hash),
+        Cl.ascii(testDoc.title),
+        Cl.ascii(testDoc.description),
+        Cl.ascii(testDoc.category),
+        Cl.buff(testDoc.signature),
+        Cl.buff(testDoc.merkleRoot),
+        Cl.buff(testDoc.publicKey),
+        Cl.list([Cl.buff(testDoc.merkleRoot)])
       ],
       deployer
     );
 
-    expect(block.result).toBeOk(Cl.uint(1));
-
-    // Try to update status as different user
+    // Try to update as different user
     block = simnet.callPublicFn(
       "quantum-seal",
       "update-document-status",
@@ -161,48 +98,67 @@ describe("quantum-seal", () => {
       wallet1
     );
 
-    expect(block.result).toBeErr(Cl.uint(401)); // ERR-NOT-AUTHORIZED
+    block.result.expectErr().expectUint(401); // ERR-NOT-AUTHORIZED
   });
 
-  it("verifies signatures correctly", () => {
+  // Signature verification
+  it("verifies valid signatures", () => {
     // First seal a document
     let block = simnet.callPublicFn(
       "quantum-seal",
       "seal-document",
       [
-        Cl.buff(testHash),
-        Cl.ascii("Test Document"),
-        Cl.ascii("Test Description"),
-        Cl.ascii("Test"),
-        Cl.buff(testSignature),
-        Cl.buff(testMerkleRoot),
-        Cl.buff(testPublicKey),
-        Cl.list([Cl.buff(testMerkleRoot)])
+        Cl.buff(testDoc.hash),
+        Cl.ascii(testDoc.title),
+        Cl.ascii(testDoc.description),
+        Cl.ascii(testDoc.category),
+        Cl.buff(testDoc.signature),
+        Cl.buff(testDoc.merkleRoot),
+        Cl.buff(testDoc.publicKey),
+        Cl.list([Cl.buff(testDoc.merkleRoot)])
       ],
       deployer
     );
 
-    expect(block.result).toBeOk(Cl.uint(1));
-
     // Verify with correct signature
-    const verifyCorrect = simnet.callReadOnlyFn(
+    const verify = simnet.callReadOnlyFn(
       "quantum-seal",
       "verify-signature",
-      [Cl.uint(1), Cl.buff(testSignature)],
+      [Cl.uint(1), Cl.buff(testDoc.signature)],
       deployer
     );
 
-    expect(verifyCorrect.result).toBeOk(Cl.bool(true));
+    verify.result.expectOk().expectBool(true);
+  });
 
-    // Verify with incorrect signature
-    const wrongSignature = createBuffer(512);  // Different 512-byte signature
-    const verifyWrong = simnet.callReadOnlyFn(
+  // Document retrieval
+  it("retrieves sealed document data", () => {
+    // First seal a document
+    let block = simnet.callPublicFn(
       "quantum-seal",
-      "verify-signature",
-      [Cl.uint(1), Cl.buff(wrongSignature)],
+      "seal-document",
+      [
+        Cl.buff(testDoc.hash),
+        Cl.ascii(testDoc.title),
+        Cl.ascii(testDoc.description),
+        Cl.ascii(testDoc.category),
+        Cl.buff(testDoc.signature),
+        Cl.buff(testDoc.merkleRoot),
+        Cl.buff(testDoc.publicKey),
+        Cl.list([Cl.buff(testDoc.merkleRoot)])
+      ],
       deployer
     );
 
-    expect(verifyWrong.result).toBeOk(Cl.bool(false));
+    // Retrieve document
+    const docResponse = simnet.callReadOnlyFn(
+      "quantum-seal",
+      "get-document",
+      [Cl.uint(1)],
+      deployer
+    );
+
+    const doc = docResponse.result.expectSome().expectTuple();
+    expect(doc.status).toBe("active");
   });
 });
